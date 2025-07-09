@@ -147,6 +147,12 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
+
+    enable_custom_all_reduce: bool = False
+    """
+    Flag to enable the custom all-reduce kernel.
+    """
+
     engine_worker_queue_port: int = 8002
     """
     Port for worker queue communication.
@@ -431,6 +437,10 @@ class EngineArgs:
                                     type=int,
                                     default=EngineArgs.tensor_parallel_size,
                                     help="Degree of tensor parallelism.")
+        parallel_group.add_argument("--enable-custom-all-reduce",
+                                action='store_true',
+                                default=EngineArgs.enable_custom_all_reduce,
+                                help="Flag to enable custom all-reduce.")
         parallel_group.add_argument(
             "--max-num-seqs",
             type=int,
@@ -743,6 +753,7 @@ class EngineArgs:
             tensor_parallel_size=self.tensor_parallel_size,
             enable_expert_parallel=self.enable_expert_parallel,
             data_parallel_size=self.data_parallel_size,
+            enable_custom_all_reduce=self.enable_custom_all_reduce
         )
 
     def create_engine_config(self) -> Config:
@@ -764,6 +775,9 @@ class EngineArgs:
 
         assert not (self.use_cudagraph and self.enable_prefix_caching), \
             "Prefix caching cannot be used with CUDA graph"
+
+        assert not (self.tensor_parallel_size<=1 and self.enable_custom_all_reduce), \
+            "enable_custom_all_reduce must be used with tensor_parallel_size>1"
 
         return Config(
             model_name_or_path=self.model,
@@ -795,4 +809,5 @@ class EngineArgs:
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             enable_logprob = self.enable_logprob,
+            enable_custom_all_reduce=self.enable_custom_all_reduce,
         )
