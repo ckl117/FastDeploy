@@ -379,7 +379,7 @@ class TokenProcessor(object):
                 if token_id != RECOVERY_STOP_SIGNAL:
                     result.outputs.token_ids.append(token_id)
                     result.outputs.logprob = float(scores[i, 0])
-                    # 构造 top_logprobs
+                    # Construct top_logprobs
                     topk_token_ids = tokens[i, :].tolist()
                     topk_logprobs = scores[i, :].tolist()
                     sampled_rank = ranks[i].item()

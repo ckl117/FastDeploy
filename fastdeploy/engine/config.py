@@ -689,7 +689,8 @@ class Config:
         self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
 
         self.enable_logprob = enable_logprob
-        # 现有架构下只能通过指定 max_logprobs 来申请通信缓冲区，默认使用 10（但前提是 enable_logprob 为 True）
+        # Under the current architecture, the communication buffer can only be applied for by specifying max_logprobs,
+        # which defaults to 10 (but only if enable_logprob is True).
         if enable_logprob:
             self.max_logprobs = 10 if max_logprobs is None else max_logprobs
         else:

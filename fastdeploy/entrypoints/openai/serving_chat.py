@@ -338,7 +338,7 @@ class OpenAIServingChat:
                     data, stream=False, enable_thinking=enable_thinking)
                 # api_server_logger.debug(f"Client {request_id} received: {data}")
                 previous_num_tokens += len(data["outputs"]["token_ids"])
-                # 处理响应的logprob
+                # The logprob for handling the response
                 output = data["outputs"]
                 raw_top_logprobs = output["top_logprobs"]
                 if raw_top_logprobs is not None:
@@ -414,11 +414,11 @@ class OpenAIServingChat:
             request_top_logprobs: int,
     ) -> Optional[LogProbs]:
         """
-        构造符合 OpenAI 风格的 logprobs 响应对象。
-        保留完整 top-k 候选，避免循环引用。
+        Construct a logprobs response object in line with the OpenAI style.
+        Retain the complete top-k candidates and avoid circular references.
         """
 
-        # 参数验证
+        # Parameter validation
         if (
                 logprobs is None
                 or request_top_logprobs is None
@@ -428,11 +428,11 @@ class OpenAIServingChat:
             return None
 
         try:
-            # 当前 token 的 top-k 候选
+            # The top-k candidates for the current token
             topk_token_ids = logprobs.logprob_token_ids[0][:request_top_logprobs + 1]
             topk_logprobs = logprobs.logprobs[0][:request_top_logprobs + 1]
 
-            # 构造 topk 的候选 token 结构（LogProbEntry）
+            # Construct the candidate token structure (LogProbEntry) of topk
             top_logprob_entries: List[LogProbEntry] = []
             for tid, lp in zip(topk_token_ids, topk_logprobs):
                 token_str = self.engine_client.data_processor.process_logprob_response([tid],
@@ -444,12 +444,12 @@ class OpenAIServingChat:
                     # bytes=list(token_bytes)
                 )
                 top_logprob_entries.append(entry)
-            # 构造 sampled token 对象（避免与 top_logprob_entries 共享引用）
+            # Construct the sampled token object (avoid sharing references with top_logprob_entries)
             sampled_entry = LogProbEntry(
                 token=top_logprob_entries[0].token,
                 logprob=top_logprob_entries[0].logprob,
                 bytes=top_logprob_entries[0].bytes,
-                top_logprobs=top_logprob_entries[1:]  # 这里是完整 topk 候选
+                top_logprobs=top_logprob_entries[1:]  # Here are the complete topk candidates
             )
 
             return LogProbs(content=[sampled_entry])
