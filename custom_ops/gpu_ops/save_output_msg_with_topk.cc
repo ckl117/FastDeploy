@@ -35,7 +35,8 @@ struct msgdata {
 };
 
 void SaveOutMmsgTopK(const paddle::Tensor& x,
-                     const paddle::Tensor& scores,
+                     const paddle::Tensor& logprob_token_ids,     // [bsz, k+1]
+                     const paddle::Tensor& logprob_scores,  // [bsz, k+1]
                      const paddle::Tensor& ranks,
                      const paddle::Tensor& not_need_stop,
                      int64_t rank_id) {
@@ -43,10 +44,12 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
         return;
     }
     auto x_cpu = x.copy_to(paddle::CPUPlace(), false);
-    auto scores_cpu = scores.copy_to(paddle::CPUPlace(), false);
+    auto logprob_token_ids_cpu = logprob_token_ids.copy_to(paddle::CPUPlace(), false);
+    auto logprob_scores_cpu = logprob_scores.copy_to(paddle::CPUPlace(), false);
     auto ranks_cpu = ranks.copy_to(paddle::CPUPlace(), false);
     int64_t* x_data = x_cpu.data<int64_t>();
-    float* scores_data = scores_cpu.data<float>();
+    int64_t* logprob_token_ids_data = logprob_token_ids_cpu.data<int64_t>();
+    float* logprob_scores_data = logprob_scores_cpu.data<float>();
     int64_t* ranks_data = ranks_cpu.data<int64_t>();
     static struct msgdata msg_sed;
     int msg_queue_id = 1;
@@ -103,14 +106,21 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
     msg_sed.mtext[0] = not_need_stop_data ? inference_msg_id_from_env
                                           : -inference_msg_id_from_env;
     int bsz = x.shape()[0];
-    int token_num = x.shape()[1];
-    int k = token_num - 1;
+    int max_num_logprobs = logprob_token_ids.shape()[1];
     msg_sed.mtext[1] = bsz;
     for (int i = 0; i < bsz; i++) {
-        for (int j = 0; j < token_num; j++) {
+        for (int j = 0; j < K + 1; j++) {
             const int64_t offset = i * (K + 1) + j;
-            msg_sed.mtext[offset + 2] = (int)x_data[i * token_num + j];
-            msg_sed.mtext_f[offset] = scores_data[i * token_num + j];
+            if (j == 0) {
+                msg_sed.mtext[offset + 2] = (int)x_data[i];
+                msg_sed.mtext_f[offset] = logprob_scores_data[i * max_num_logprobs + j];
+            } else if (j < max_num_logprobs) {
+                msg_sed.mtext[offset + 2] = (int)logprob_token_ids_data[i * max_num_logprobs + j];
+                msg_sed.mtext_f[offset] = logprob_scores_data[i * max_num_logprobs + j];
+            } else {
+                msg_sed.mtext[offset + 2] = -1;
+                msg_sed.mtext_f[offset] = 0.0;
+            }
         }
         msg_sed.mtext_ranks[i] = (int)ranks_data[i];
     }
@@ -131,8 +141,8 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
 }
 
 PD_BUILD_STATIC_OP(save_output_topk)
-    .Inputs({"x", "scores", "ranks", "not_need_stop"})
-    .Attrs({"rank_id: int64_t"})
+    .Inputs({"x", "scores", "topk_ids", "logprob_scores", "ranks", "not_need_stop"})
+    .Attrs({"k: int", "rank_id: int64_t"})
     .Outputs({"x_out"})
     .SetInplaceMap({{"x", "x_out"}})
     .SetKernelFn(PD_KERNEL(SaveOutMmsgTopK));

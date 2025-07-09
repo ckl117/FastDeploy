@@ -169,6 +169,7 @@ def post_process_normal(sampler_output: SamplerOutput,
             )
         else:
             save_output_topk(
+                sampler_output.sampled_token_ids,
                 sampler_output.logprobs_tensors.logprob_token_ids,
                 sampler_output.logprobs_tensors.logprobs,
                 sampler_output.logprobs_tensors.selected_token_ranks,
