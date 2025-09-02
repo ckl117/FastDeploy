@@ -839,25 +839,20 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Remove padding
         (
-            ids_remove_padding,
-            batch_id_per_token,
-            cu_seqlens_q,
-            cu_seqlens_k,
             output_cum_offsets,
             output_padding_offset,
         ) = pre_process(
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
             self.speculative_decoding,
+            self.share_inputs["ids_remove_padding"],
+            self.share_inputs["batch_id_per_token"],
+            self.share_inputs["cu_seqlens_q"],
+            self.share_inputs["cu_seqlens_k"],
             (self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
             self.share_inputs["seq_lens_encoder"],
             self.share_inputs["seq_lens_decoder"],
         )
-
-        self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
-        self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
-        self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
-        self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
 
         # For speculative decoding
         if self.speculative_decoding:

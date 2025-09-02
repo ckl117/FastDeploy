@@ -81,10 +81,52 @@ from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput, Sampler
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
 
+def get_padding_offset_normal(
+    input_ids: paddle.Tensor,
+    cum_offsets_now: paddle.Tensor,
+    token_num: paddle.Tensor,
+    seq_lens_this_time: int,
+    ids_remove_padding: paddle.Tensor,
+    batch_id_per_token: paddle.Tensor,
+    cu_seqlens_q: paddle.Tensor,
+    cu_seqlens_k: paddle.Tensor,
+):
+    if current_platform.is_cuda():
+        # get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time, ids_remove_padding,
+        #     batch_id_per_token,
+        #     cu_seqlens_q,
+        #     cu_seqlens_k)
+        (
+            ids_remove_padding_out,
+            batch_id_per_token_out,
+            cu_seqlens_q_out,
+            cu_seqlens_k_out,
+        ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
+        ids_remove_padding.copy_(ids_remove_padding_out, False)
+        batch_id_per_token.copy_(batch_id_per_token_out, False)
+        cu_seqlens_q.copy_(cu_seqlens_q_out, False)
+        cu_seqlens_k.copy_(cu_seqlens_k_out, False)
+    else:
+        (
+            ids_remove_padding_out,
+            batch_id_per_token_out,
+            cu_seqlens_q_out,
+            cu_seqlens_k_out,
+        ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
+        ids_remove_padding.copy_(ids_remove_padding_out, False)
+        batch_id_per_token.copy_(batch_id_per_token_out, False)
+        cu_seqlens_q.copy_(cu_seqlens_q_out, False)
+        cu_seqlens_k.copy_(cu_seqlens_k_out, False)
+
+
 def pre_process(
     input_ids: paddle.Tensor,
     seq_lens_this_time: int,
     speculative_decoding: bool,
+    ids_remove_padding: paddle.Tensor,
+    batch_id_per_token: paddle.Tensor,
+    cu_seqlens_q: paddle.Tensor,
+    cu_seqlens_k: paddle.Tensor,
     draft_tokens: Optional[paddle.Tensor] = None,
     seq_lens_encoder: Optional[paddle.Tensor] = None,
     seq_lens_decoder: Optional[paddle.Tensor] = None,
@@ -111,18 +153,17 @@ def pre_process(
     output_padding_offset = None
     output_cum_offsets = None
     if speculative_decoding:
-        (
-            ids_remove_padding,
-            batch_id_per_token,
-            cu_seqlens_q,
-            cu_seqlens_k,
-        ) = speculate_get_padding_offset(
+        speculate_get_padding_offset(
             input_ids,
             draft_tokens,
             cum_offsets_now,
             token_num,
             seq_lens_this_time,
             seq_lens_encoder,
+            ids_remove_padding,
+            batch_id_per_token,
+            cu_seqlens_q,
+            cu_seqlens_k,
         )
         seq_lens_output = speculate_get_seq_lens_output(
             seq_lens_this_time,
@@ -140,17 +181,17 @@ def pre_process(
             max_len,
         )
     else:
-        (
+        get_padding_offset_normal(
+            input_ids,
+            cum_offsets_now,
+            token_num,
+            seq_lens_this_time,
             ids_remove_padding,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
+        )
     return (
-        ids_remove_padding,
-        batch_id_per_token,
-        cu_seqlens_q,
-        cu_seqlens_k,
         output_cum_offsets,
         output_padding_offset,
     )
