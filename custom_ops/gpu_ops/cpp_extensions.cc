@@ -313,9 +313,13 @@ std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
     const int decoder_step_token_num);
 
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
-                                             const paddle::Tensor &cum_offsets,
-                                             const paddle::Tensor &token_num,
-                                             const paddle::Tensor &seq_len);
+                    const paddle::Tensor &cum_offsets,
+                    const paddle::Tensor &token_num,
+                    const paddle::Tensor &seq_len,
+                    paddle::Tensor &x_remove_padding,
+                    paddle::Tensor &batch_id_per_token,
+                    paddle::Tensor &cu_seqlens_q,
+                    paddle::Tensor &cu_seqlens_k);
 
 void SetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
                            const paddle::Tensor &input_ids,
@@ -622,7 +626,11 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
     const paddle::Tensor& cum_offsets,
     const paddle::Tensor& token_num,
     const paddle::Tensor& seq_len,
-    const paddle::Tensor& seq_lens_encoder);
+    const paddle::Tensor& seq_lens_encoder,
+    paddle::Tensor &x_remove_padding,
+    paddle::Tensor &batch_id_per_token,
+    paddle::Tensor &cu_seqlens_q,
+    paddle::Tensor &cu_seqlens_k);
 
 std::vector<paddle::Tensor> SpeculateGetSeqLensOutput(
     const paddle::Tensor& seq_lens_this_time,
@@ -633,6 +641,8 @@ std::vector<paddle::Tensor> SpeculateGetOutputPaddingOffset(
     const paddle::Tensor& output_cum_offsets_tmp,
     const paddle::Tensor& out_token_num,
     const paddle::Tensor& seq_lens_output,
+    paddle::Tensor& output_padding_offset,
+    paddle::Tensor& output_cum_offsets,
     const int max_seq_len);
 
 

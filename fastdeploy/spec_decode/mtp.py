@@ -532,17 +532,15 @@ class MTPProposer(Proposer):
         for substep in range(self.num_model_steps):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
-                # Remove padding
-                (
-                    ids_remove_padding,
-                    batch_id_per_token,
-                    cu_seqlens_q,
-                    cu_seqlens_k,
-                    output_cum_offsets,
-                    output_padding_offset,
-                ) = pre_process(
+                pre_process(
                     self.model_inputs["input_ids"],
                     self.model_inputs["seq_lens_this_time"],
+                    self.model_inputs["ids_remove_padding"],
+                    self.model_inputs["batch_id_per_token"],
+                    self.model_inputs["cu_seqlens_q"],
+                    self.model_inputs["cu_seqlens_k"],
+                    self.model_inputs["output_cum_offsets"],
+                    self.model_inputs["output_padding_offset"],
                     True,
                     self.model_inputs["draft_tokens"],
                     self.model_inputs["seq_lens_encoder"],

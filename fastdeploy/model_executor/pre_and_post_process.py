@@ -92,20 +92,16 @@ def get_padding_offset_normal(
     cu_seqlens_k: paddle.Tensor,
 ):
     if current_platform.is_cuda():
-        # get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time, ids_remove_padding,
-        #     batch_id_per_token,
-        #     cu_seqlens_q,
-        #     cu_seqlens_k)
-        (
-            ids_remove_padding_out,
-            batch_id_per_token_out,
-            cu_seqlens_q_out,
-            cu_seqlens_k_out,
-        ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
-        ids_remove_padding.copy_(ids_remove_padding_out, False)
-        batch_id_per_token.copy_(batch_id_per_token_out, False)
-        cu_seqlens_q.copy_(cu_seqlens_q_out, False)
-        cu_seqlens_k.copy_(cu_seqlens_k_out, False)
+        get_padding_offset(
+            input_ids,
+            cum_offsets_now,
+            token_num,
+            seq_lens_this_time,
+            ids_remove_padding,
+            batch_id_per_token,
+            cu_seqlens_q,
+            cu_seqlens_k,
+        )
     else:
         (
             ids_remove_padding_out,
@@ -127,6 +123,8 @@ def pre_process(
     batch_id_per_token: paddle.Tensor,
     cu_seqlens_q: paddle.Tensor,
     cu_seqlens_k: paddle.Tensor,
+    output_cum_offsets: paddle.Tensor,
+    output_padding_offset: paddle.Tensor,
     draft_tokens: Optional[paddle.Tensor] = None,
     seq_lens_encoder: Optional[paddle.Tensor] = None,
     seq_lens_decoder: Optional[paddle.Tensor] = None,
@@ -150,8 +148,6 @@ def pre_process(
     max_len = input_ids.shape[1]
     cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
     token_num = paddle.sum(seq_lens_this_time)
-    output_padding_offset = None
-    output_cum_offsets = None
     if speculative_decoding:
         speculate_get_padding_offset(
             input_ids,
@@ -174,10 +170,12 @@ def pre_process(
             seq_lens_output = seq_lens_output[0]
         output_token_num = paddle.sum(seq_lens_output)
         output_cum_offsets_tmp = paddle.cumsum(max_len - seq_lens_output, dtype="int32")
-        output_padding_offset, output_cum_offsets = speculate_get_output_padding_offset(
+        speculate_get_output_padding_offset(
             output_cum_offsets_tmp,
             output_token_num,
             seq_lens_output,
+            output_padding_offset,
+            output_cum_offsets,
             max_len,
         )
     else:

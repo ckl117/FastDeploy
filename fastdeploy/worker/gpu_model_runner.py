@@ -838,10 +838,7 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
         # Remove padding
-        (
-            output_cum_offsets,
-            output_padding_offset,
-        ) = pre_process(
+        pre_process(
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
             self.speculative_decoding,
@@ -849,15 +846,12 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["batch_id_per_token"],
             self.share_inputs["cu_seqlens_q"],
             self.share_inputs["cu_seqlens_k"],
+            self.share_inputs["output_cum_offsets"],
+            self.share_inputs["output_padding_offset"],
             (self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
             self.share_inputs["seq_lens_encoder"],
             self.share_inputs["seq_lens_decoder"],
         )
-
-        # For speculative decoding
-        if self.speculative_decoding:
-            self.share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
-            self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])

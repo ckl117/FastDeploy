@@ -63,11 +63,11 @@ __global__ void GetPaddingOffsetKernel(int *batch_id_per_token,
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
                                              const paddle::Tensor &cum_offsets,
                                              const paddle::Tensor &token_num,
-                                             const paddle::Tensor &seq_len){
-                                            //   paddle::Tensor &x_remove_padding,
-                                            //   paddle::Tensor &batch_id_per_token,
-                                            //   paddle::Tensor &cu_seqlens_q,
-                                            //   paddle::Tensor &cu_seqlens_k) {
+                                             const paddle::Tensor &seq_len,
+                                              paddle::Tensor &x_remove_padding,
+                                              paddle::Tensor &batch_id_per_token,
+                                              paddle::Tensor &cu_seqlens_q,
+                                              paddle::Tensor &cu_seqlens_k) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
     auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(input_ids.place()));
     auto cu_stream = dev_ctx->stream();
@@ -81,14 +81,10 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
     auto cpu_token_num = token_num.copy_to(paddle::CPUPlace(), false);
 
     const int token_num_data = cpu_token_num.data<int64_t>()[0];
-    auto x_remove_padding = paddle::empty(
-        {token_num_data}, paddle::DataType::INT64, input_ids.place());
-    auto batch_id_per_token = paddle::empty(
-        {token_num_data}, paddle::DataType::INT32, input_ids.place());
-    auto cu_seqlens_q =
-        paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
-    auto cu_seqlens_k =
-        paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
+    x_remove_padding.reshape({token_num_data});
+    batch_id_per_token.reshape({token_num_data});
+    cu_seqlens_q.reshape({bsz + 1});
+    cu_seqlens_k.reshape({bsz + 1});
 #ifdef PADDLE_WITH_COREX
     int blockSize = std::min((token_num_data + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE, 128);
 #else
@@ -108,7 +104,10 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
         seq_len.data<int>(),
         cum_offsets_out.data<int>(),
         seq_length);
-
+    return {x_remove_padding,
+            batch_id_per_token,
+            cu_seqlens_q,
+            cu_seqlens_k};  // , enc_token_num, dec_token_num};
 }
 
 std::vector<std::vector<int64_t>> GetPaddingOffsetInferShape(
@@ -132,29 +131,29 @@ std::vector<paddle::DataType> GetPaddingOffsetInferDtype(
             seq_len_dtype};
 }
 
-PD_BUILD_STATIC_OP(get_padding_offset)
-    .Inputs({"input_ids", "token_num", "cum_offsets", "seq_len"})
-    .Outputs({"x_remove_padding",
-              "batch_id_per_token",
-              "cu_seqlens_q",
-              "cu_seqlens_k"})
-    .SetKernelFn(PD_KERNEL(GetPaddingOffset))
-    .SetInferShapeFn(PD_INFER_SHAPE(GetPaddingOffsetInferShape))
-    .SetInferDtypeFn(PD_INFER_DTYPE(GetPaddingOffsetInferDtype));
-
 // PD_BUILD_STATIC_OP(get_padding_offset)
-//     .Inputs({"input_ids", "token_num", "cum_offsets", "seq_len", "x_remove_padding",
+//     .Inputs({"input_ids", "cum_offsets", "token_num", "seq_len"})
+//     .Outputs({"x_remove_padding",
 //               "batch_id_per_token",
 //               "cu_seqlens_q",
 //               "cu_seqlens_k"})
-//     .Outputs({"x_remove_padding_out",
-//               "batch_id_per_token_out",
-//               "cu_seqlens_q_out",
-//               "cu_seqlens_k_out"})
-//     .SetInplaceMap({{"x_remove_padding", "x_remove_padding_out"},
-//                     {"batch_id_per_token", "batch_id_per_token_out"},
-//                     {"cu_seqlens_q", "cu_seqlens_q_out"},
-//                     {"cu_seqlens_k", "cu_seqlens_k_out"}})
 //     .SetKernelFn(PD_KERNEL(GetPaddingOffset))
 //     .SetInferShapeFn(PD_INFER_SHAPE(GetPaddingOffsetInferShape))
 //     .SetInferDtypeFn(PD_INFER_DTYPE(GetPaddingOffsetInferDtype));
+
+PD_BUILD_STATIC_OP(get_padding_offset)
+    .Inputs({"input_ids", "token_num", "cum_offsets", "seq_len", "x_remove_padding",
+              "batch_id_per_token",
+              "cu_seqlens_q",
+              "cu_seqlens_k"})
+    .Outputs({"x_remove_padding_out",
+              "batch_id_per_token_out",
+              "cu_seqlens_q_out",
+              "cu_seqlens_k_out"})
+    .SetInplaceMap({{"x_remove_padding", "x_remove_padding_out"},
+                    {"batch_id_per_token", "batch_id_per_token_out"},
+                    {"cu_seqlens_q", "cu_seqlens_q_out"},
+                    {"cu_seqlens_k", "cu_seqlens_k_out"}})
+    .SetKernelFn(PD_KERNEL(GetPaddingOffset))
+    .SetInferShapeFn(PD_INFER_SHAPE(GetPaddingOffsetInferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(GetPaddingOffsetInferDtype));

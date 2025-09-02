@@ -40,6 +40,8 @@ std::vector<paddle::Tensor> SpeculateGetOutputPaddingOffset(
     const paddle::Tensor& output_cum_offsets_tmp,
     const paddle::Tensor& out_token_num,
     const paddle::Tensor& seq_lens_output,
+    paddle::Tensor& output_padding_offset,
+    paddle::Tensor& output_cum_offsets,
     const int max_seq_len) {
     auto cu_stream = output_cum_offsets_tmp.stream();
     std::vector<int64_t> output_cum_offsets_tmp_shape =
@@ -47,13 +49,8 @@ std::vector<paddle::Tensor> SpeculateGetOutputPaddingOffset(
     const int bsz = output_cum_offsets_tmp_shape[0];
     auto cpu_out_token_num = out_token_num.copy_to(paddle::CPUPlace(), false);
 
-    auto output_padding_offset = paddle::full({cpu_out_token_num},
-                                              0,
-                                              paddle::DataType::INT32,
-                                              output_cum_offsets_tmp.place());
-    auto output_cum_offsets =
-        output_cum_offsets_tmp.copy_to(output_cum_offsets_tmp.place(), false);
-
+    output_padding_offset.reshape({cpu_out_token_num.data<int64_t>()[0]});
+    output_cum_offsets.reshape(output_cum_offsets_tmp.shape());
     SpeculateGetOutputPaddingOffsetKernel<<<bsz, 256, 0, cu_stream>>>(
         output_padding_offset.data<int>(),
         output_cum_offsets.data<int>(),
@@ -80,9 +77,11 @@ std::vector<paddle::DataType> SpeculateGetOutputPaddingOffsetInferDtype(
 }
 
 PD_BUILD_STATIC_OP(speculate_get_output_padding_offset)
-    .Inputs({"output_cum_offsets_tmp", "out_token_num", "seq_lens_output"})
-    .Outputs({"output_padding_offset", "output_cum_offsets"})
+    .Inputs({"output_cum_offsets_tmp", "out_token_num", "seq_lens_output", "output_padding_offset", "output_cum_offsets"})
+    .Outputs({"output_padding_offset_out", "output_cum_offsets_out"})
     .Attrs({"max_seq_len: int"})
+    .SetInplaceMap({{"output_padding_offset", "output_padding_offset_out"},
+                    {"output_cum_offsets", "output_cum_offsets_out"}})
     .SetKernelFn(PD_KERNEL(SpeculateGetOutputPaddingOffset))
     .SetInferShapeFn(PD_INFER_SHAPE(SpeculateGetOutputPaddingOffsetInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(SpeculateGetOutputPaddingOffsetInferDtype));
