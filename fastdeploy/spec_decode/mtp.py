@@ -280,6 +280,8 @@ class MTPProposer(Proposer):
         self.model_inputs["batch_id_per_token"] = paddle.clone(self.main_model_inputs["batch_id_per_token"])
         self.model_inputs["cu_seqlens_q"] = paddle.clone(self.main_model_inputs["cu_seqlens_q"])
         self.model_inputs["cu_seqlens_k"] = paddle.clone(self.main_model_inputs["cu_seqlens_k"])
+        self.model_inputs["output_cum_offsets"] = paddle.clone(self.main_model_inputs["output_cum_offsets"])
+        self.model_inputs["output_padding_offset"] = paddle.clone(self.main_model_inputs["output_padding_offset"])
         self.model_inputs["decoder_batch_ids"] = paddle.clone(self.main_model_inputs["decoder_batch_ids"])
         self.model_inputs["decoder_tile_ids_per_batch"] = paddle.clone(
             self.main_model_inputs["decoder_tile_ids_per_batch"]
@@ -535,26 +537,18 @@ class MTPProposer(Proposer):
                 pre_process(
                     self.model_inputs["input_ids"],
                     self.model_inputs["seq_lens_this_time"],
+                    True,
                     self.model_inputs["ids_remove_padding"],
                     self.model_inputs["batch_id_per_token"],
                     self.model_inputs["cu_seqlens_q"],
                     self.model_inputs["cu_seqlens_k"],
                     self.model_inputs["output_cum_offsets"],
                     self.model_inputs["output_padding_offset"],
-                    True,
                     self.model_inputs["draft_tokens"],
                     self.model_inputs["seq_lens_encoder"],
                     self.model_inputs["seq_lens_decoder"],
                 )
 
-                # Initialize forward meta data
-                self.model_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
-                self.model_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
-                self.model_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
-                self.model_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
-                # for speculative decoding
-                self.model_inputs["output_cum_offsets"] = output_cum_offsets
-                self.model_inputs["output_padding_offset"] = output_padding_offset
                 self._initialize_forward_meta()
 
                 # Get sampling metadata
