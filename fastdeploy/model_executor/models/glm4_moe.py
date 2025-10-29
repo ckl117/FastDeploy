@@ -444,6 +444,8 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
         for loaded_weight_name, loaded_weight in weights_iterator:
+            print(f"loaded_weight_name = {loaded_weight_name}")
+            print(f"loaded_weight = {loaded_weight.shape}")
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
                     continue

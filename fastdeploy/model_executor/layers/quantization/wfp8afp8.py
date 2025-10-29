@@ -126,7 +126,7 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
             layer.weight_dtype = "float8_e4m3fn"
             # TODO(YuanRisheng): set weight logic should be moved to process_loaded_weights func
             self.skip_quant = False
-            layer.create_parameter(
+            layer.weight = layer.create_parameter(
                 shape=layer.weight_shape,
                 dtype=layer.weight_dtype,
                 is_bias=False,
@@ -137,6 +137,23 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
                 dtype="float32",
                 is_bias=False,
                 default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            extra_weight_attrs["output_dim"] = not extra_weight_attrs["output_dim"]
+
+            extra_weight_attrs["weight_need_transpose"] = not extra_weight_attrs.get("model_format") == "torch"
+            set_weight_attrs(
+                layer.weight,
+                extra_weight_attrs,
+            )
+            extra_scale_attrs = {**extra_weight_attrs}
+            extra_scale_attrs.pop("output_dim", None)
+            set_weight_attrs(
+                layer.weight_scale,
+                {
+                    **extra_scale_attrs,
+                    "is_scale": True,
+                },
             )
 
     def process_weights_after_loading(self, layer) -> None:

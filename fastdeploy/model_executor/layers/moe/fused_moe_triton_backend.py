@@ -515,6 +515,26 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
+            extra_weight_attrs["weight_need_transpose"] = not extra_weight_attrs.get("model_format") == "torch"
+            extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
+            print(f"extra_weight_attrs = {extra_weight_attrs}")
+            set_weight_attrs(
+                getattr(layer, up_gate_proj_weight_name),
+                extra_weight_attrs,
+            )
+            set_weight_attrs(
+                getattr(layer, up_gate_proj_scale_name),
+                extra_weight_attrs,
+            )
+
+            set_weight_attrs(
+                getattr(layer, down_proj_weight_name),
+                extra_weight_attrs,
+            )
+            set_weight_attrs(
+                getattr(layer, down_proj_scale_name),
+                extra_weight_attrs,
+            )
 
     def process_weights_after_loading(self, layer):
         """ """

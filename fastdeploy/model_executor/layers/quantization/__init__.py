@@ -96,11 +96,21 @@ def _get_offline_quant_config_name(quantization_config, is_torch_weight, is_v1_l
     if is_torch_weight:
         # only support block_wise_fp8 now
         quant_method = quantization_config.get("quant_method")
+        if quant_method == "compressed-tensors":
+            config_groups = quantization_config.get("config_groups", dict())
+            if len(config_groups) == 1:
+                for _, quant_config in config_groups.items():
+                    input_activations = quant_config.get("input_activations")
+                    weights = quant_config.get("weights")
+                    if input_activations["strategy"] == "token" and weights["strategy"] == "channel":
+                        quant_config_name = "wfp8afp8"
+                        return quant_config_name
+
         has_block_size = "weight_block_size" in quantization_config
         if quant_method == "fp8" and has_block_size:
             quant_config_name = "block_wise_fp8"
         else:
-            raise ValueError("Torch weight offline quantization only supports block-wise FP8.")
+            raise ValueError("Torch weight offline quantization only supports block-wise FP8 and wfp8afp8.")
     else:
         quant_config_name = quantization_config["quantization"]
     return quant_config_name

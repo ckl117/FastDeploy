@@ -200,6 +200,7 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
         if weight_need_transpose:
             loaded_weight = get_tensor(loaded_weight)
             loaded_weight = loaded_weight.transpose([1, 0])
+        print(f"loaded_weight = {loaded_weight.shape}")
         # Tensor parallelism splits the weight along the output_dim
         if output_dim is not None and fd_config is not None and fd_config.parallel_config.tensor_parallel_size > 1:
             dim = -1 if output_dim else 0
@@ -221,6 +222,8 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
                 loaded_weight = loaded_weight.cast(param.dtype)
         if param.shape != loaded_weight.shape:
             # for e_score_correction_bias
+            print(f"param.shape = {param.shape}")
+            print(f"loaded_weight.shape = {loaded_weight.shape}")
             loaded_weight = loaded_weight.reshape(param.shape)
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
