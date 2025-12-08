@@ -881,46 +881,91 @@ void DecoderWriteCacheWithRoPEKernel(
           use_neox_rotary_style,
           rope_3d);
     } else if (cache_quant_type_str == "block_wise_fp8") {
-      constexpr int num_warps = 4;
-      const int all_warps = ((num_heads + 2 * kv_num_heads) + num_warps - 1) /
-                            num_warps * num_warps;
-      dim3 grids(bsz, all_warps / num_warps);
-      launchWithPdlWhenEnabled(
-          append_decode_cache_int8_rope_qk_norm_kernel<DataType_,
-                                                       4,
-                                                       0,
-                                                       128,
-                                                       false,
-                                                       true>,
-          grids,
-          num_warps * 32,
-          0,
-          stream,
-          reinterpret_cast<const DataType_*>(qkv_ptr),
-          key_cache_out->data<uint8_t>(),
-          value_cache_out->data<uint8_t>(),
-          reinterpret_cast<DataType_*>(qkv_out->data<T>()),
-          block_tables.data<int>(),
-          cu_seqlens_q.data<int>(),
-          seq_lens.data<int>(),
-          seq_lens_encoder.data<int>(),
-          cos_emb,
-          sin_emb,
-          const_cast<DataType_*>(reinterpret_cast<const DataType_*>(
-              cache_k_scale.get().data<T>())),
-          const_cast<DataType_*>(reinterpret_cast<const DataType_*>(
-              (cache_v_scale.get().data<T>()))),
-          nullptr,
-          nullptr,
-          max_seq_len,
-          max_blocks_per_seq,
-          num_heads,
-          block_size,
-          127.0f,
-          -127.0f,
-          kv_num_heads,
-          rope_3d,
-          rms_norm_eps);
+      if (use_neox_rotary_style) {
+        assert(dim_head == 128);
+        const uint32_t elem_nums =
+            bsz * (num_heads + 2 * kv_num_heads) * dim_head / 2;
+        constexpr int PackSize = 16 / sizeof(T);
+        assert(elem_nums % PackSize == 0);
+        const int pack_num = elem_nums / PackSize;
+        const int blocksize = 128;
+        int grid_size = 1;
+        GetNumBlocks<128>(pack_num, &grid_size);
+        launchWithPdlWhenEnabled(
+            append_decode_cache_T_int8_neox_rope_kernel<DataType_,
+                                                        PackSize,
+                                                        0,
+                                                        128,
+                                                        true,
+                                                        true>,
+            grid_size,
+            blocksize,
+            0,
+            stream,
+            reinterpret_cast<const DataType_*>(qkv_ptr),
+            key_cache_out->data<uint8_t>(),
+            value_cache_out->data<uint8_t>(),
+            reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+            block_tables.data<int>(),
+            cu_seqlens_q.data<int>(),
+            seq_lens.data<int>(),
+            seq_lens_encoder.data<int>(),
+            cos_emb,
+            sin_emb,
+            const_cast<DataType_*>(reinterpret_cast<const DataType_*>(
+                cache_k_scale.get().data<T>())),
+            const_cast<DataType_*>(reinterpret_cast<const DataType_*>(
+                (cache_v_scale.get().data<T>()))),
+            max_seq_len,
+            max_blocks_per_seq,
+            num_heads,
+            dim_head,
+            block_size,
+            elem_nums,
+            kv_num_heads,
+            rope_3d);
+      } else {
+        constexpr int num_warps = 4;
+        const int all_warps = ((num_heads + 2 * kv_num_heads) + num_warps - 1) /
+                              num_warps * num_warps;
+        dim3 grids(bsz, all_warps / num_warps);
+        launchWithPdlWhenEnabled(
+            append_decode_cache_int8_rope_qk_norm_kernel<DataType_,
+                                                         4,
+                                                         0,
+                                                         128,
+                                                         false,
+                                                         true>,
+            grids,
+            num_warps * 32,
+            0,
+            stream,
+            reinterpret_cast<const DataType_*>(qkv_ptr),
+            key_cache_out->data<uint8_t>(),
+            value_cache_out->data<uint8_t>(),
+            reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+            block_tables.data<int>(),
+            cu_seqlens_q.data<int>(),
+            seq_lens.data<int>(),
+            seq_lens_encoder.data<int>(),
+            cos_emb,
+            sin_emb,
+            const_cast<DataType_*>(reinterpret_cast<const DataType_*>(
+                cache_k_scale.get().data<T>())),
+            const_cast<DataType_*>(reinterpret_cast<const DataType_*>(
+                (cache_v_scale.get().data<T>()))),
+            nullptr,
+            nullptr,
+            max_seq_len,
+            max_blocks_per_seq,
+            num_heads,
+            block_size,
+            127.0f,
+            -127.0f,
+            kv_num_heads,
+            rope_3d,
+            rms_norm_eps);
+      }
     } else if (cache_quant_type_str == "cache_int4_zp") {
       append_decode_cache_int4_rope(
           reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
