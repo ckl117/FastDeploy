@@ -308,16 +308,29 @@ class FlashAttentionBackend(AttentionBackend):
                 self.rope_3d,
             )
 
-            res_encoder = self.flash_attn_func(
+            # res_encoder = self.flash_attn_func(
+            #     q,
+            #     k,
+            #     v,
+            #     metadata.cu_seqlens_q,
+            #     metadata.cu_seqlens_k,
+            #     max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
+            #     max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
+            #     causal=self.causal,
+            #     **self.flash_attn_kwargs,
+            # )[0].reshape([-1, self.attn_outputsize_tp])
+            from flash_mask.cute import flash_attn_varlen_func
+
+            res_encoder = flash_attn_varlen_func(
                 q,
                 k,
                 v,
-                metadata.cu_seqlens_q,
-                metadata.cu_seqlens_k,
-                max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
-                max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
-                causal=self.causal,
-                **self.flash_attn_kwargs,
+                cu_seqlens_q=metadata.cu_seqlens_q,
+                cu_seqlens_k=metadata.cu_seqlens_k,
+                seqused_q=forward_meta.max_len_tensor_cpu[0],
+                seqused_k=forward_meta.max_len_tensor_cpu[3],
+                causal=True,
+                num_splits=1,
             )[0].reshape([-1, self.attn_outputsize_tp])
 
         res_decoder = append_attention(
