@@ -250,12 +250,26 @@ class FlashAttentionBackend(AttentionBackend):
             )
 
         use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1].item() > 0
+        cache_quant_type_str = getattr(layer, "cache_quant_type_str", "none")
+        if cache_quant_type_str == "block_wise_fp8":
+            cache_k = forward_meta.caches[4 * layer.layer_id]
+            cache_v = forward_meta.caches[4 * layer.layer_id + 1]
+            cache_k_scales = forward_meta.caches[4 * layer.layer_id + 2]
+            cache_v_scales = forward_meta.caches[4 * layer.layer_id + 3]
+        else:
+            cache_k = forward_meta.caches[2 * layer.layer_id]
+            cache_v = forward_meta.caches[2 * layer.layer_id + 1]
+            cache_k_scales = getattr(layer, "cache_k_scale", None)
+            cache_v_scales = getattr(layer, "cache_v_scale", None)
 
         if use_fa_do_prefill:
+            # print(f'{qkv=}')
+            # print(f'{metadata.kv_token_num_cpu[0].item()=}')
+            # print(f'{cache_quant_type_str=}')
             q, k, v, _ = gqa_rope_write_cache(
                 qkv,
-                forward_meta.caches[2 * layer.layer_id],
-                forward_meta.caches[2 * layer.layer_id + 1],
+                cache_k,
+                cache_v,
                 forward_meta.cu_seqlens_q,
                 metadata.cu_seqlens_k,
                 forward_meta.rotary_embs,
@@ -272,8 +286,8 @@ class FlashAttentionBackend(AttentionBackend):
                 metadata.pre_cache_num_blocks_cpu,
                 getattr(layer, "q_norm_weight", None),
                 getattr(layer, "k_norm_weight", None),
-                getattr(layer, "cache_k_scale", None),
-                getattr(layer, "cache_v_scale", None),
+                cache_k_scales,
+                cache_v_scales,
                 getattr(layer, "cache_k_out_scale", None),
                 getattr(layer, "cache_v_out_scale", None),
                 getattr(layer, "cache_k_zp", None),
@@ -283,7 +297,7 @@ class FlashAttentionBackend(AttentionBackend):
                 self.max_seq_len,
                 getattr(layer, "rms_norm_eps", 1e-6),
                 layer.use_neox_rotary_style,
-                getattr(layer, "cache_quant_type_str", "none"),
+                cache_quant_type_str,
                 self.rope_3d,
             )
 
@@ -301,8 +315,8 @@ class FlashAttentionBackend(AttentionBackend):
 
         res_decoder = append_attention(
             qkv,
-            forward_meta.caches[2 * layer.layer_id],
-            forward_meta.caches[2 * layer.layer_id + 1],
+            cache_k,
+            cache_v,
             self.zero_seq_enc_lens_for_decode if use_fa_do_prefill else forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
@@ -323,8 +337,8 @@ class FlashAttentionBackend(AttentionBackend):
             forward_meta.attn_mask,
             layer.qkv_bias,
             layer.qkv_scale,
-            getattr(layer, "cache_k_scale", None),
-            getattr(layer, "cache_v_scale", None),
+            cache_k_scales,
+            cache_v_scales,
             getattr(layer, "cache_k_out_scale", None),
             getattr(layer, "cache_v_out_scale", None),
             getattr(layer, "cache_k_zp", None),
@@ -338,7 +352,7 @@ class FlashAttentionBackend(AttentionBackend):
             getattr(layer, "sinks", None),
             getattr(layer, "rms_norm_eps", 1e-6),
             metadata._fuse_kernel_compute_dtype,
-            getattr(layer, "cache_quant_type_str", "none"),
+            cache_quant_type_str,
             layer.use_neox_rotary_style,
             self.rope_3d,
             self.max_seq_len,
