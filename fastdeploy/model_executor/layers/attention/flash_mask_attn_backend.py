@@ -198,7 +198,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
         ) = pre_cache_len_concat(
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
-            forward_meta.max_len_tensor_cpu[2],
+            forward_meta.max_len_tensor_cpu[2],  # 最大prefix kv长度
             self.block_size,
         )
 
@@ -250,6 +250,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 layer.layer_id + self.start_layer_index,
             )
 
+        # 有prefill
         if metadata.max_len_tensor_cpu[1] > 0:
             res_encoder = paddle.zeros([qkv.shape[0], self.num_heads * self.head_dim], dtype=qkv.dtype)
             q, k, v, _ = gqa_rope_write_cache(
