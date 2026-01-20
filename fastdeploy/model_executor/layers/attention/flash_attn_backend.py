@@ -149,6 +149,8 @@ class FlashAttentionMetadata(AttentionMetadata):
     _fuse_kernel_compute_dtype: str = "bf16"
     _dtype: paddle.dtype = paddle.bfloat16
 
+    max_len_tensor_cpu_decoder: paddle.Tensor = None
+
     fa4_attn_mask_offsets: paddle.Tensor = None
 
 
