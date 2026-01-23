@@ -61,6 +61,7 @@ if current_platform.is_cuda():
         flashmask_attention = None
 else:
     merge_prefill_decode_output = None
+    flashmask_attention = None
 
 import os
 
