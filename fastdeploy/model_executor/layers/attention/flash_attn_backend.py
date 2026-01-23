@@ -83,6 +83,7 @@ def flash_attn_func(
 ):
     assert FLASH_ATNN_VERSION is not None
     if FLASH_ATNN_VERSION == 4:
+        assert flashmask_attention is not None, "Cannot import flashmask_attention, please install it first"
         assert fa4_attn_mask_offsets is not None
         assert num_heads is not None
         assert kv_num_heads is not None
