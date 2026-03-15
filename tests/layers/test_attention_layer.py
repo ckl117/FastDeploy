@@ -72,8 +72,8 @@ class TestAttentionPerformance(unittest.TestCase):
         self.model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         self.create_model_config_json(self.model_dir)
         self.prefill_batch_size = 3
-        self.prefill_seq_len = 500  # 1024 * 4
-        self.cache_len = 1024 * 2
+        self.prefill_seq_len = int(1024 * 2)
+        self.cache_len = 0  # 1024 * 2
 
     # region Helper Functions
     def create_model_config_json(self, model_dir) -> str:
@@ -90,6 +90,7 @@ class TestAttentionPerformance(unittest.TestCase):
             "num_attention_heads": 32,
             "num_key_value_heads": 4,
             "num_hidden_layers": 10,
+            "causal": False,
         }
         config_path = os.path.join(model_dir, "config.json")
         with open(config_path, "w") as f:
@@ -283,7 +284,7 @@ class TestAttentionPerformance(unittest.TestCase):
 
         return hidden_states
 
-    def test_append_attn_backend_decode_performance_with_prefill(self):
+    def do_test_append_attn_backend_decode_performance_with_prefill(self):
         # Test parameters
         test_steps = 100
 
@@ -334,6 +335,7 @@ class TestAttentionPerformance(unittest.TestCase):
             fd_config=fd_config,
             attn_backend=attn_backend,
             cache_quant_type_str=cache_quant_type_str,
+            has_attn_mask=not getattr(fd_config.model_config, "causal", True),
         )
 
         attn_backend.init_attention_metadata(forward_meta)
@@ -361,6 +363,9 @@ class TestAttentionPerformance(unittest.TestCase):
 
         times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
         print(times[-5:])
+        new_time = times[-5:]
+        avg_time = sum(new_time) / len(new_time)
+
         # p.stop()
 
         # return
@@ -413,6 +418,8 @@ class TestAttentionPerformance(unittest.TestCase):
             del forward_meta
 
         # p.stop()
+
+        return avg_time
 
     def test_flash_attn_v3(self):
         if self.sm_version < 89 or self.sm_version >= 100:
@@ -557,11 +564,11 @@ class TestAttentionPerformance(unittest.TestCase):
         times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
         print(times[-5:])
 
-    def test_flash_attn_v4(self):
+    def do_test_flash_attn_v4(self):
         if self.sm_version < 100:
             self.skipTest("Flash Attention V4 requires SM100+.")
         # Test parameters
-        test_steps = 100
+        test_steps = 20
 
         prefill_batch_size = self.prefill_batch_size
         prefill_seq_len = self.prefill_seq_len
@@ -609,7 +616,9 @@ class TestAttentionPerformance(unittest.TestCase):
             fd_config=fd_config,
             attn_backend=attn_backend,
             cache_quant_type_str=cache_quant_type_str,
+            has_attn_mask=True,
         )
+        forward_meta.can_prefill_causal = self.can_prefill_causal
 
         attn_backend.init_attention_metadata(forward_meta)
         self.attn_forward(attention_layer, forward_meta, prefill_hidden_states)
@@ -628,6 +637,74 @@ class TestAttentionPerformance(unittest.TestCase):
 
         times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
         print(times[-5:])
+        new_time = times[-5:]
+        avg_time = sum(new_time) / len(new_time)
+        return avg_time
+
+    def test_append_attn_and_fa4(self):
+        self.skipTest("Test for comparing the performance of append_attn and fa4.")
+        self.prefill_batch_size = 3
+        prefill_len_list = [200, 500] + [1024 * 2**i for i in range(4)]
+        cache_len_list = [0] + [1024 * 2**i for i in range(6)]
+        cache_len_list.insert(3, 3584)
+        prefill_len_list.insert(4, 3584)
+        prefill_len_list = [1024 * 8]
+        cache_len_list = [0]
+        result_time = []
+        for cache_len in cache_len_list:
+            cache_time_list = []
+            for prefill_len in prefill_len_list:
+                self.prefill_seq_len = int(prefill_len)
+                self.cache_len = int(cache_len)
+                append_attn_time = self.do_test_append_attn_backend_decode_performance_with_prefill()
+                fa4_time = self.do_test_flash_attn_v4()
+                cache_time_list.append([append_attn_time, fa4_time])
+            result_time.append(cache_time_list)
+        print("cache_len,prefill_len,append_attn_time(ms),fa4_time(ms)")
+        for cache_idx in range(len(cache_len_list)):
+            cache_len = cache_len_list[cache_idx]
+            for prefill_idx in range(len(prefill_len_list)):
+                prefill_len = prefill_len_list[prefill_idx]
+                append_attn_time = result_time[cache_idx][prefill_idx][0]
+                fa4_time = result_time[cache_idx][prefill_idx][1]
+                print(f"{cache_len},{prefill_len},{append_attn_time:.3f},{fa4_time:.3f}")
+
+    def test_fa4_mask_q_causal(self):
+        # self.skipTest("Test for comparing the performance of append_attn and fa4.")
+        self.prefill_batch_size = 3
+        prefill_len_list = [200, 500] + [1024 * 2**i for i in range(4)]
+        cache_len_list = [0] + [1024 * 2**i for i in range(6)]
+        cache_len_list.insert(3, 3584)
+        prefill_len_list.insert(4, 3584)
+
+        # cache_len_list = [0]
+        # prefill_len_list = [1024 * 8]
+
+        # cache_len_list = [1024 * 5]
+        # prefill_len_list = [500]
+
+        result_time = []
+        for cache_len in cache_len_list:
+            cache_time_list = []
+            for prefill_len in prefill_len_list:
+                self.prefill_seq_len = int(prefill_len)
+                self.cache_len = int(cache_len)
+                self.can_prefill_causal = False
+                print("test mask_q")
+                append_attn_time = self.do_test_flash_attn_v4()
+                self.can_prefill_causal = True
+                print("test causal")
+                fa4_time = self.do_test_flash_attn_v4()
+                cache_time_list.append([append_attn_time, fa4_time])
+            result_time.append(cache_time_list)
+        print("cache_len,prefill_len,fa4_mask_q(ms),fa4_causal(ms)")
+        for cache_idx in range(len(cache_len_list)):
+            cache_len = cache_len_list[cache_idx]
+            for prefill_idx in range(len(prefill_len_list)):
+                prefill_len = prefill_len_list[prefill_idx]
+                append_attn_time = result_time[cache_idx][prefill_idx][0]
+                fa4_time = result_time[cache_idx][prefill_idx][1]
+                print(f"{cache_len},{prefill_len},{append_attn_time:.3f},{fa4_time:.3f}")
 
 
 if __name__ == "__main__":

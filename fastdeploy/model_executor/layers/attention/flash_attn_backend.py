@@ -395,7 +395,15 @@ class FlashAttentionBackend(AttentionBackend):
                     self.block_size,
                 )
 
-                if forward_meta.attn_mask_offsets is not None and (not can_prefill_causal):
+                if (
+                    forward_meta.attn_mask_offsets is not None
+                    and can_prefill_causal
+                    and forward_meta.max_len_tensor_cpu[1].item() >= 1024
+                    and forward_meta.max_len_tensor_cpu[3].item() >= 1024 * 5
+                ):
+                    can_prefill_causal = False
+                self.can_prefill_causal = can_prefill_causal
+                if forward_meta.attn_mask_offsets is not None and (not self.can_prefill_causal):
                     forward_meta.attn_mask_q = get_attn_mask_q(
                         cu_seqlens_q=forward_meta.cu_seqlens_q,
                         cu_seqlens_k=forward_meta.cu_seqlens_k,
@@ -452,7 +460,7 @@ class FlashAttentionBackend(AttentionBackend):
                 max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
                 max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
                 attn_mask_q=forward_meta.attn_mask_q,
-                causal=can_prefill_causal,
+                causal=self.can_prefill_causal,
                 num_heads=self.num_heads,
                 kv_num_heads=self.kv_num_heads,
                 head_dim=self.head_dim,
